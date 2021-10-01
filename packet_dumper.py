@@ -20,11 +20,13 @@ def find_process(pattern):
 
 def on_packet_in(msg):
     packet_id = msg["id"]
-    print(f"Received packet [{packet_id}] ", msg["packet"])
+    print(f"Received packet [{packet_id}]")
+    print(json.dumps(msg["packet"], indent=4))
 
 def on_packet_out(msg):
     packet_id = msg["id"]
-    print(f"Sending packet [{packet_id}] ", msg["packet"])
+    print(f"Sending packet [{packet_id}]")
+    print(json.dumps(msg["packet"], indent=4))
 
 def on_message(msg, data):
     if msg["type"] == "send":
