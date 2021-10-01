@@ -119,7 +119,7 @@ function onPacketRecv(args) {
 function onPacketSend(args) {
     var arg_count = args[1];
     var flash_args = ptr(args[2]);
-    var obj = flash_args.readPointer();
+    var packet_obj = flash_args.add(8).readPointer();
 
     var packet_id = getPacketIdFromObj(packet_obj);
     var str_packet = packetToString(packet_obj);
