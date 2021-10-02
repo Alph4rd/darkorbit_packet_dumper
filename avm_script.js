@@ -3,6 +3,7 @@
 var as3_ns = null;
 var separator_string = null;
 var my_json_object = null;
+var fake_vtable = null;
 
 var pep_base = null;
 
@@ -168,7 +169,7 @@ findPattern(darkbot_pattern, function(addr, size) {
             my_json_object = Memory.alloc(0x38);
             my_json_object.add(0x30).writePointer(as3_ns);
 
-            var fake_vtable = Memory.alloc(0x38);
+            fake_vtable = Memory.alloc(0x38);
             fake_vtable.add(8).writePointer(top_level);
             my_json_object.add(0x10).writePointer(fake_vtable);
             console.log("[+] Fake json object at: ", my_json_object);
