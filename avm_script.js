@@ -73,6 +73,13 @@ function getPacketIdFromObj(packet_obj) {
     return null;
 }
 
+function getClassName(script_obj) {
+    var vtable = script_obj.add(0x10).readPointer();
+    var traits = vtable.add(0x28).readPointer();
+    var name_str = traits.add(0x90).readU64();
+    return readAvmString(name_str);
+}
+
 function packetToString(packet_obj) {
     if (stringify_f && my_json_object && separator_string)
         return readAvmString(stringify_f(my_json_object, packet_obj.add(1), 0, 0, separator_string ));
@@ -92,7 +99,7 @@ function onPacketRecv(args) {
     var str_packet = packetToString(packet_obj);
 
     if (packet_id && str_packet)
-        send({"type":0, "id":packet_id, "packet": JSON.parse(str_packet)});
+        send({"type":0, "id":packet_id, "name":getClassName(packet_obj), "packet": JSON.parse(str_packet)});
 };
 
 function onPacketSend(args) {
@@ -104,7 +111,7 @@ function onPacketSend(args) {
     var str_packet = packetToString(packet_obj);
 
     if (packet_id && str_packet)
-        send({"type":1, "id":packet_id, "packet": JSON.parse(str_packet)});
+        send({"type":1, "id":packet_id, "name":getClassName(packet_obj), "packet": JSON.parse(str_packet)});
 };
 
 findPattern(darkbot_pattern, function(addr, size) {

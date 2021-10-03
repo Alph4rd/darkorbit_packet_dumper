@@ -37,12 +37,14 @@ def find_flash_process():
 
 def on_packet_in(msg):
     packet_id = msg["id"]
-    print(f"Received packet [{packet_id}]")
+    packet_name = msg["name"]
+    print(f"Received packet {packet_name} [{packet_id}]")
     print(json.dumps(msg["packet"], indent=4))
 
 def on_packet_out(msg):
     packet_id = msg["id"]
-    print(f"Sending packet [{packet_id}]")
+    packet_name = msg["name"]
+    print(f"Sending packet {packet_name} [{packet_id}]")
     print(json.dumps(msg["packet"], indent=4))
 
 def on_message(msg, data):
@@ -52,6 +54,8 @@ def on_message(msg, data):
             on_packet_in(payload)
         elif payload["type"] == 1:
             on_packet_out(payload)
+    else:
+        print(msg)
 
 def main():
     pid = find_flash_process()
