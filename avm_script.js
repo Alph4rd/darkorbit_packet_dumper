@@ -115,8 +115,6 @@ function onPacketSend(args) {
 };
 
 findPattern(darkbot_pattern, function(addr, size) {
-    console.log("[+] Darkbot found!!");
-
     addr -= 228;
     var main_address    = ptr(addr + 0x540).readPointer();
     var vtable          = main_address.add(0x10).readPointer();
@@ -130,19 +128,20 @@ findPattern(darkbot_pattern, function(addr, size) {
 
     var method_list      = pool.add(offsets.method_list).readPointer();
     var ns_list          = avm_core.add(offsets.ns_list).readPointer();
+    var ns_count         = avm_core.add(0x80).readPointer();
 
 
-    console.log('[+] Darkbot pattern found at: ' + addr.toString(16));
-    console.log('[+] Main address: ' + main_address);
-    console.log('[+] ConstPool address: ' + pool);
-    console.log('[+] AvmCore address: ' + avm_core);
-    console.log("[!] Namespace list: ", ns_list);
+    console.log("[+] Darkbot pattern    :", addr.toString(16));
+    console.log("[+] Main address       :", main_address);
+    console.log("[+] ConstPool address  :", pool);
+    console.log("[+] AvmCore address    :", avm_core);
+    console.log("[+] Namespace list     :", ns_list);
 
     var packet_handler = method_list.add(0x10 + packet_handler_id * 8).readPointer();
     var packet_sender  = method_list.add(0x10 + packet_sender_id  * 8).readPointer();
 
-    console.log('[+] Packet handler : ' + packet_handler);
-    console.log('[+] Packet sender  : ' + packet_sender);
+    console.log("[+] Packet handler     :", packet_handler);
+    console.log("[+] Packet sender      :", packet_sender);
 
     // I believe these could be null if not JITd yed
     var handler_code = packet_handler.add(0x8).readPointer();
@@ -156,8 +155,7 @@ findPattern(darkbot_pattern, function(addr, size) {
         onEnter: onPacketSend
     });
 
-    // hashtable, the vm seems to use gc to find out when to stop iterating
-    for (var i = 0; i < 29000; i++) {
+    for (var i = 0, c = 0; i < 0x40000 && c < ns_count; i++) {
         var namespace = ns_list.add(i * 8).readPointer();
         if (namespace == 0)
             continue;
@@ -170,7 +168,9 @@ findPattern(darkbot_pattern, function(addr, size) {
         // Find as3 namespace
         if (s && s == "http://adobe.com/AS3/2006/builtin" && !as3_ns) {
             as3_ns = namespace;
-            separator_string = Memory.dup(namespace, 0x28);
+            // Remove AtomKind bits
+            var namespace_str = namespace.add(0x18).readPointer().and(uint64(0x7).not());
+            separator_string = Memory.dup(namespace_str, 0x28);
             separator_string.add(0x20).writeU64(0x0);
 
             my_json_object = Memory.alloc(0x38);
@@ -179,14 +179,15 @@ findPattern(darkbot_pattern, function(addr, size) {
             fake_vtable = Memory.alloc(0x38);
             fake_vtable.add(8).writePointer(top_level);
             my_json_object.add(0x10).writePointer(fake_vtable);
-            console.log("[+] Fake json object at: ", my_json_object);
+            console.log("[+] Fake json object   :", my_json_object);
         }
+        c++;
     }
 });
 
 findPattern(stringify_pattern, function(addr, size) {
     if (addr > pep_base.base && addr < (pep_base + pep_base.size)) {
-        console.log("[+] Json stringify:", addr.toString(16));
+        console.log("[+] Json stringify     :", ptr(addr));
         stringify_f = new NativeFunction(ptr(addr), 'uint64', ['pointer', 'pointer', 'uint64', 'uint64', 'pointer']);
     }
 });
