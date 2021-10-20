@@ -104,7 +104,10 @@ function removeKind(pointer) {
 }
 
 function readAvmString(str_pointer, c=0) {
-    str_pointer = removeKind(str_pointer);
+    str_pointer = removeKind(str_pointer); 
+    if (str_pointer.equals(0))
+        return "";
+    
     var flags = str_pointer.add(0x24).readU32();
     var size  = str_pointer.add(0x20).readU32();
 
@@ -112,11 +115,13 @@ function readAvmString(str_pointer, c=0) {
     size <<= width;
 
     if (size > 1024 || size < 0 || c > 1) 
-        return null;
+        return "";
+    
+    // 
+    if ((flags & (2 << 1)) != 0)
+        return readAvmString(removeKind(str_pointer.add(0x18).readPointer()), c+1);
 
     var str_addr = str_pointer.add(0x10).readPointer();
-    if (str_addr == 0)
-        return readAvmString(removeKind(str_pointer.add(0x18).readPointer()), c+1);
 
     if (width)
         return str_addr.readUtf16String(size);
