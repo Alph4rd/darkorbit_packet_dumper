@@ -114,7 +114,7 @@ function readAvmString(str_pointer, c=0) {
     var width = (flags & 0x1);
     size <<= width;
 
-    if (size > 1024 || size < 0 || c > 1) 
+    if (size < 0 || c > 1) 
         return "";
     
     // 
