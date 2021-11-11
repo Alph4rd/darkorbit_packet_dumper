@@ -6,8 +6,8 @@ import re
 import psutil
 
 preamble =  '''
-const packet_sender_id  = 27006;
-const packet_handler_id = 27013;
+const packet_sender_id  = 27007;
+const packet_handler_id = 27014;
 const darkbot_pattern = "01 00 00 00 00 00 00 00 00 00 00 00 01 00 00 00 00 00 00 00 02 00 00 00 00 00 00 00 01 00 00 00 00 00 00 00 01 00 00 00 00 00 00 00 00 00 00 00 01 00 00 00 01 00 00 00 00 00 00 00 00 00 00 00 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 00 00 00 00 00 00 00"
 '''
 
