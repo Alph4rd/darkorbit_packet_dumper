@@ -357,11 +357,9 @@ function jsValueToAtom(value) {
     if (typeof(value) == "number"){ 
         return ptr(value << 3).or(6);
     } else if (typeof(value) == "string") {
-        return createAvmString(value);
+        return createAvmString(value).or(2);
     } else if (typeof(value) == "boolean") {
         return ptr((+ value) << 3).or(5);
-    } else if (Array.isArray(value)) {
-        return createAvmArray(value);
     }
 }
 
