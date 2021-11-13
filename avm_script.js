@@ -10,6 +10,15 @@ var pep_base = null;
 // String* stringifySpecializedToString(Atom value, ArrayObject* propertyWhitelist, FunctionObject* replacerFunction, String* gap);
 var stringify_f     = null;
 
+// void Toplevel::setproperty(Atom obj, const Multiname* multiname, Atom value, VTable* vtable) 
+var setproperty_f   = null;
+
+// Atom Toplevel::getproperty(Atom obj, const Multiname* multiname, VTable* vtable)
+var getproperty_f   = null;
+
+// 
+var createstring_f = null;
+
 var packet_handler = null;
 var packet_sender = null;
 
@@ -20,9 +29,130 @@ var avm = {
     core : null,
     constant_pool : null,
     abc_env : null,
-    top_level : null
+    toplevel : null
 };
 
+
+const TRAIT_Slot          = 0x00;
+const TRAIT_Method        = 0x01;
+const TRAIT_Getter        = 0x02;
+const TRAIT_Setter        = 0x03;
+const TRAIT_Class         = 0x04;
+const TRAIT_Const         = 0x06;
+const TRAIT_COUNT         = TRAIT_Const+1;
+const TRAIT_mask          = 15;
+function getObjectTraits(object_ptr) {
+    var traits = object_ptr.add(0x10).readPointer().add(0x28).readPointer();
+
+    var traits_pos = traits.add(0xb0).readPointer();
+    var pos_type   = traits.add(0xf5).readU8();
+
+    if (pos_type != 0)
+        return;
+
+    var tdata = new CoolPtr(traits_pos);
+
+    var qname = tdata.ReadU32();
+    var sname = tdata.ReadU32();
+
+    var flags = tdata.ReadU8();
+
+    if ((flags & 8) != 0)
+        tdata.ReadU32();
+
+    // Skip
+    var interface_count = tdata.ReadU32();
+    for (var i = 0; i < interface_count; i++)
+        tdata.ReadU32();
+
+    // Skip iinit
+    tdata.ReadU32();
+
+    var trait_count = tdata.ReadU32();
+
+    var traits = [];
+
+    for (var i = 0; i < trait_count; i++) {
+        var name = tdata.ReadU32();
+        var tag = tdata.ReadU8();
+
+        var kind = tag & 0xf;
+
+        switch (kind) {
+            case TRAIT_Slot:
+            case TRAIT_Const:
+                var slot_id    = tdata.ReadU32();
+                var type_name  = tdata.ReadU32();
+                // references one of the tables in the constant pool, depending on the value of vkind
+                var vindex     = tdata.ReadU32(); 
+                if (vindex)
+                    tdata.ReadU8(); // vkind, ignored by the avm
+
+                traits.push({name : name, kind : kind, type : type_name});
+                break;
+            case TRAIT_Class:
+                var slot_id     = tdata.ReadU32();
+                //  is an index that points into the class array of the abcFile entry
+                var class_index = tdata.ReadU32(); 
+                traits.push({name : name, kind : kind, index : class_index});
+                break;
+            case TRAIT_Method:
+            case TRAIT_Getter:
+            case TRAIT_Setter:
+            {
+                var disp_id         = tdata.ReadU32();
+                // is an index that points into the method array of the abcFile e
+                var method_index    = tdata.ReadU32(); 
+                traits.push({name : name, kind : kind, method : method_index});
+                break;
+            }
+            default:
+        }
+
+        if (tag & 0x40) {
+            var metadata_count = tdata.ReadU32();
+            for (var i = 0; i < metadata_count; i++) {
+                var index = tdata.ReadU32();
+            }
+        }
+    }
+
+    return traits;
+}
+
+function getPropertyTrait(obj_ptr, prop_name) {
+    // Could also call TopLevel::haspropety 
+    return getObjectTraits(obj_ptr).find(t => {
+        var multiname = getMultiname(t.name);
+        return multiname && !multiname.equals(0) && readAvmString(multiname.readPointer()) == prop_name;
+    });
+}
+
+function setObjectProperty(obj_ptr, name, value) {
+    var prop_trait = getPropertyTrait(obj_ptr, name);
+
+    if (!prop_trait) {
+        console.log("setObjectProperty: property not found");
+        return null;
+    }
+
+    var trait_mn = getMultiname(prop_trait.name);
+    var vtable =  obj_ptr.add(0x10).readPointer();
+
+    setproperty_f(avm.toplevel, obj_ptr.or(1), trait_mn, value, vtable);
+}
+
+function getObjectProperty(obj_ptr, name) {
+    var prop_trait = getPropertyTrait(obj_ptr, name);
+
+    if (!prop_trait)
+        return ptr(0);
+
+    var trait_mn = getMultiname(prop_trait.name);
+    var vtable =  obj_ptr.add(0x10).readPointer();
+
+    return getproperty_f(avm.toplevel, obj_ptr.or(1), trait_mn, vtable);
+}
 
 Process.enumerateModules({
     onMatch: function(module) {
@@ -41,7 +171,7 @@ class CoolPtr {
 
     ReadU8() { 
         var r = this.ptr.readU8();
-        this.ptr.add(1);
+        this.ptr = this.ptr.add(1);
         return r;
     }
 
@@ -49,26 +179,26 @@ class CoolPtr {
         var data = new Uint8Array(this.ptr.readByteArray(5 * 4));
         var result = data[0];
         if (!(result & 0x00000080)) {
-            this.ptr.add(1);
+            this.ptr = this.ptr.add(1);
             return result;
         }
         result = (result & 0x0000007f) | data[1]<<7;
         if (!(result & 0x00004000)) {
-            this.ptr.add(2);
+            this.ptr = this.ptr.add(2);
             return result;
         }
         result = (result & 0x00003fff) | data[2]<<14;
         if (!(result & 0x00200000)) {
-            this.ptr.add(2);
+            this.ptr = this.ptr.add(3);
             return result;
         }
         result = (result & 0x001fffff) | data[3]<<21;
         if (!(result & 0x10000000)) {
-            this.ptr.add(2);
+            this.ptr = this.ptr.add(4);
             return result;
         }
         result = (result & 0x0fffffff) | data[4]<<28;
-        this.ptr.add(5);
+        this.ptr = this.ptr.add(5);
         return result;
     }
 }
@@ -87,8 +217,8 @@ function findPattern(pattern, match_handler) {
 }
 
 function getMultiname(index) {
-    var precomp_mn      = avm.constant_pool.add(0xe8).readPointer();
-    var precomp_mn_size = avm.constant_pool.add(0x98).readU32();
+    var precomp_mn      = avm.constant_pool.add(offsets.mn_list).readPointer();
+    var precomp_mn_size = avm.constant_pool.add(offsets.mn_count).readU32();
     if (index < precomp_mn_size)
         return precomp_mn.add(0x18 + index * 0x18);
     return null;
@@ -138,7 +268,7 @@ function getMethodName(method_info) {
         name_index = -name_index;
         var multiname = getMultiname(name_index);
         if (multiname != 0) {
-            console.log(multiname.add(0x8).readPointer());
+            //console.log(multiname.add(0x8).readPointer());
             return readAvmString(multiname.readPointer());
         }
 
@@ -218,6 +348,23 @@ function onPacketSend(args) {
         send({"type":1, "id":packet_id, "name":getClassName(packet_obj), "packet": JSON.parse(str_packet)});
 };
 
+function createAvmString(str) {
+    var string_buf = Memory.allocUtf8String(str);
+    return createstring_f(avm.core, string_buf, -1, 0, 0, 0);
+}
+
+function jsValueToAtom(value) {
+    if (typeof(value) == "number"){ 
+        return ptr(value << 3).or(6);
+    } else if (typeof(value) == "string") {
+        return createAvmString(value);
+    } else if (typeof(value) == "boolean") {
+        return ptr((+ value) << 3).or(5);
+    } else if (Array.isArray(value)) {
+        return createAvmArray(value);
+    }
+}
+
 // TODO: support onLeave
 function hookLater(method_ptr, callback) {
     hook_queue.push({method:method_ptr, handler:callback});
@@ -268,6 +415,39 @@ Memory.scan(pep_base.base, pep_base.size, stringify_pattern, {
     onComplete: function() { }
 });
 
+Memory.scan(pep_base.base, pep_base.size, createstring_pattern, {
+    onMatch : function(addr, size) {
+        if (!createstring_f) {
+            console.log("[+] CreateString  :", ptr(addr));
+            createstring_f = new NativeFunction(ptr(addr), 'pointer', ['pointer', 'pointer', 'int', 'int', 'bool','bool']);
+        }
+    },
+    onError: function(reason){ },
+    onComplete: function() { }
+});
+
+Memory.scan(pep_base.base, pep_base.size, setproperty_pattern, {
+    onMatch : function(addr, size) {
+        if (!setproperty_f) {
+            console.log("[+] setproperty     :", ptr(addr));
+            setproperty_f = new NativeFunction(ptr(addr), 'void', ['pointer', 'pointer', 'pointer', 'pointer', 'pointer']);
+        }
+    },
+    onError: function(reason){ },
+    onComplete: function() { }
+});
+
+Memory.scan(pep_base.base, pep_base.size, getproperty_pattern, {
+    onMatch : function(addr, size) {
+        if (!getproperty_f) {
+            console.log("[+] getproperty     :", ptr(addr));
+            getproperty_f = new NativeFunction(ptr(addr), 'pointer', ['pointer', 'pointer', 'pointer', 'pointer']);
+        }
+    },
+    onError: function(reason){ },
+    onComplete: function() { }
+});
+
 findPattern(darkbot_pattern, function(addr, size) {
     addr -= 228;
     if (as3_ns)
@@ -275,7 +455,7 @@ findPattern(darkbot_pattern, function(addr, size) {
     var main_address    = ptr(addr + 0x540).readPointer();
     var vtable          = main_address.add(0x10).readPointer();
     var traits          = vtable.add(0x28).readPointer();
-    avm.top_level       = vtable.add(0x8).readPointer();
+    avm.toplevel        = vtable.add(0x8).readPointer();
     var vtable_init     = vtable.add(0x10).readPointer();
     var vtable_scope    = vtable_init.add(0x18).readPointer();
     avm.abc_env         = vtable_scope.add(0x10).readPointer();
@@ -313,7 +493,7 @@ findPattern(darkbot_pattern, function(addr, size) {
             my_json_object.add(0x30).writePointer(as3_ns);
 
             fake_vtable = Memory.alloc(0x38);
-            fake_vtable.add(8).writePointer(avm.top_level);
+            fake_vtable.add(8).writePointer(avm.toplevel);
             my_json_object.add(0x10).writePointer(fake_vtable);
             console.log("[+] Fake json object   :", my_json_object);
             break;
