@@ -1,49 +1,23 @@
 const packet_sender_id  = 27007;
 const packet_handler_id = 27014;
 var patterns = { 
-    darkbot : "01 00 00 00 00 00 00 00 00 00 00 00 01 00 00 00 00 00 00 00 02 00 00 00 00 00 00 00 01 00 00 00 00 00 00 00 01 00 00 00 00 00 00 00 00 00 00 00 01 00 00 00 01 00 00 00 00 00 00 00 00 00 00 00 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 00 00 00 00 00 00 00"
+    darkbot : "ff ff 01 00 00 00 00 00 00 00 00 00 00 00 01 00 00 00 00 00 00 00 02 00 00 00 00 00 00 00 01 00 00 00 00 00 00 00 01 00 00 00 00 00 00 00 00 00 00 00 01 00 00 00 01 00 00 00 00 00 00 00 00 00 00 00 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 00 00 00 00 00 00 00"
 };
 
-var offsets = { };
-
-
-if (Process.platform == "windows") {
-    patterns.stringify = "40 53 48 81 ec c0 00 00 00 48 8b 84 24 f0 00 00 00 48 8b da 48 8b 51 10 48 89 44 24 28"
-    patterns.verifyjit          = "48 89 5c 24 08 48 89 6c 24 10 48 89 74 24 18 57 48 81 ec 00 03 00 00 48 8d 41 30"
-    patterns.setproperty = "48 89 5c 24 08 48 89 6c 24 10 48 89 74 24 18 48 89 7c 24 20 41 56 48 83 ec 30 48 8b 5c 24 60 48 8b ea 49 8b f9 49 8b f0 4c 8b f1 48 8b 53 28"
-    patterns.getproperty = "48 89 5c 24 08 48 89 6c 24 10 56 57 41 56 48 83 ec 20 48 8b f2 4d 8b f1 49 8b 51 28 49 8b d8"
-    patterns.createstring = "40 53 55 57 41 55 41 56 48 83 ec 50 33 ed 45 8b f1 41 8b d8 48 8b fa 4c 8b e9 48 85 d2"
-
-    offsets = {
-        method_list : 0x148,
-        ns_list : 0x188,
-        mn_list : 0xc8,
-        mn_count : 0x80
-    }
-} else if (Process.platform == "linux") {
-    patterns.stringify          = "55 48 89 d0 48 89 f5 4d 89 c1 49 89 c8 48 89 c1 53 48 81 ec 98 00 00 00"
-    patterns.verifyjit          = "48 89 5c 24 d0 4c 89 64 24 e0 48 89 fb 4c 89 6c 24 e8 4c 89 74 24 f0 49 89 f4 4c 89 7c 24 f8 48 89 6c 24 d8 4d 89 c7 48 81 ec 08 03 00 00"
-    patterns.setproperty        = "48 89 5c 24 e0 48 89 6c 24 e8 48 89 d3 4c 89 64 24 f0 4c 89 6c 24 f8 48 83 ec 38 49 89 f5 49 8b 70 28"
-    patterns.getproperty        = "48 89 5c 24 d8 48 89 6c 24 e0 48 89 d3 4c 89 64 24 e8 4c 89 6c 24 f0 49 89 f4 4c 89 74 24 f8 48 83 ec 38 48 8b 71 28 48 89 fd 49 89 cd e8 3e 60 fd ff"
-    patterns.createstring       = "41 57 41 56 41 55 49 89 fd 41 54 55 89 d5 53 48 89 f3 48 83 ec 68 48 85 f6"
-
-    offsets= {
-        method_list : 0x180,
-        ns_list : 0x190,
-        mn_list : 0xe8,
-        mn_count : 0x98
-    };
-} else {
-    console.log("[!] Os not supported");
+function findFlashLib()
+{
+    return Process.enumerateModules().find(el => {
+        return el.name.indexOf("pepflash") >= 0 || el.name.indexOf("Flash.ocx") >= 0
+    })
 }
+
+var flash_lib = findFlashLib();
 
 // Objects for json stringfy
 var as3_ns = null;
 var separator_string = null;
 var my_json_object = null;
 var fake_vtable = null;
-
-var pep_base = null;
 
 // String* stringifySpecializedToString(Atom value, ArrayObject* propertyWhitelist, FunctionObject* replacerFunction, String* gap);
 var stringify_f     = null;
@@ -69,6 +43,49 @@ var avm = {
     abc_env : null,
     toplevel : null
 };
+
+var offsets = { };
+
+if (Process.platform == "windows") {
+    offsets = {
+        method_list : 0x148,
+        ns_list : 0x188,
+        mn_list : 0xc8,
+        mn_count : 0x80
+    }
+    if (flash_lib.name.indexOf("Flash.ocx") >= 0) {
+        patterns.stringify          = "48 89 5c 24 08 48 89 6c 24 18 56 57 41 56 48 81 ec d0 00 00 00"
+        patterns.verifyjit          = "40 53 55 56 57 41 56 41 57 48 81 ec 18 03 00 00 48 8b 05 ?? ?? ?? ?? 48 33 c4"
+        patterns.setproperty        = "48 89 5c 24 08 48 89 6c 24 10 48 89 74 24 18 48 89 7c 24 20 41 56 48 83 ec 30 48 8b 5c 24 60 48 8b ea"
+        patterns.getproperty        = "40 53 55 56 57 41 56 48 83 ec 30 48 8b 05 ?? ?? ?? ?? 48 33 c4 48 89 44 24 28 48 8b f2 49 8b f9"
+        patterns.createstring       = "40 53 55 57 41 55 41 57 48 83 ec 60 48 8b 05 ?? ?? ?? ?? 48 33 c4 48 89 44 24 40"
+        //patterns.newarray           = "48 89 5c 24 08 57 48 83 ec 20 48 8b 41 18 8b da ba 09 00 00 00 49 8b f8 48 8b 48 08"
+        offsets.ns_list = 0x180;
+    } else {
+        patterns.stringify = "40 53 48 81 ec c0 00 00 00 48 8b 84 24 f0 00 00 00 48 8b da 48 8b 51 10 48 89 44 24 28"
+        patterns.verifyjit          = "48 89 5c 24 08 48 89 6c 24 10 48 89 74 24 18 57 48 81 ec 00 03 00 00 48 8d 41 30"
+        patterns.setproperty = "48 89 5c 24 08 48 89 6c 24 10 48 89 74 24 18 48 89 7c 24 20 41 56 48 83 ec 30 48 8b 5c 24 60 48 8b ea 49 8b f9 49 8b f0 4c 8b f1 48 8b 53 28"
+        patterns.getproperty = "48 89 5c 24 08 48 89 6c 24 10 56 57 41 56 48 83 ec 20 48 8b f2 4d 8b f1 49 8b 51 28 49 8b d8"
+        patterns.createstring = "40 53 55 57 41 55 41 56 48 83 ec 50 33 ed 45 8b f1 41 8b d8 48 8b fa 4c 8b e9 48 85 d2"
+    }
+
+
+} else if (Process.platform == "linux") {
+    patterns.stringify          = "55 48 89 d0 48 89 f5 4d 89 c1 49 89 c8 48 89 c1 53 48 81 ec 98 00 00 00"
+    patterns.verifyjit          = "48 89 5c 24 d0 4c 89 64 24 e0 48 89 fb 4c 89 6c 24 e8 4c 89 74 24 f0 49 89 f4 4c 89 7c 24 f8 48 89 6c 24 d8 4d 89 c7 48 81 ec 08 03 00 00"
+    patterns.setproperty        = "48 89 5c 24 e0 48 89 6c 24 e8 48 89 d3 4c 89 64 24 f0 4c 89 6c 24 f8 48 83 ec 38 49 89 f5 49 8b 70 28"
+    patterns.getproperty        = "48 89 5c 24 d8 48 89 6c 24 e0 48 89 d3 4c 89 64 24 e8 4c 89 6c 24 f0 49 89 f4 4c 89 74 24 f8 48 83 ec 38 48 8b 71 28 48 89 fd 49 89 cd e8 3e 60 fd ff"
+    patterns.createstring       = "41 57 41 56 41 55 49 89 fd 41 54 55 89 d5 53 48 89 f3 48 83 ec 68 48 85 f6"
+
+    offsets= {
+        method_list : 0x180,
+        ns_list : 0x190,
+        mn_list : 0xe8,
+        mn_count : 0x98
+    };
+} else {
+    console.log("[!] Os not supported");
+}
 
 
 const TRAIT_Slot          = 0x00;
@@ -191,15 +208,6 @@ function getObjectProperty(obj_ptr, name) {
 
     return getproperty_f(avm.toplevel, obj_ptr.or(1), trait_mn, vtable);
 }
-
-Process.enumerateModules({
-    onMatch: function(module) {
-        if (module.name.indexOf("pepflash") >= 0) 
-            pep_base = module;
-    },
-    onComplete: function() { }
-});
-
 
 // Used for parsing abc data
 class CoolPtr {
@@ -407,7 +415,7 @@ function hookLater(method_ptr, callback) {
 }
 
 var previous_hooks = [];
-Memory.scan(pep_base.base, pep_base.size, patterns.verifyjit, {
+Memory.scan(flash_lib.base, flash_lib.size, patterns.verifyjit, {
     onMatch : function(addr, size) {
         console.log("[+] Found verifyJit:", ptr(addr));
 
@@ -440,7 +448,7 @@ Memory.scan(pep_base.base, pep_base.size, patterns.verifyjit, {
     onComplete: function() { }
 });
 
-Memory.scan(pep_base.base, pep_base.size, patterns.stringify, {
+Memory.scan(flash_lib.base, flash_lib.size, patterns.stringify, {
     onMatch : function(addr, size) {
         if (!stringify_f) {
             console.log("[+] Json stringify     :", ptr(addr));
@@ -451,7 +459,7 @@ Memory.scan(pep_base.base, pep_base.size, patterns.stringify, {
     onComplete: function() { }
 });
 
-Memory.scan(pep_base.base, pep_base.size, patterns.createstring, {
+Memory.scan(flash_lib.base, flash_lib.size, patterns.createstring, {
     onMatch : function(addr, size) {
         if (!createstring_f) {
             console.log("[+] CreateString  :", ptr(addr));
@@ -462,7 +470,7 @@ Memory.scan(pep_base.base, pep_base.size, patterns.createstring, {
     onComplete: function() { }
 });
 
-Memory.scan(pep_base.base, pep_base.size, patterns.setproperty, {
+Memory.scan(flash_lib.base, flash_lib.size, patterns.setproperty, {
     onMatch : function(addr, size) {
         if (!setproperty_f) {
             console.log("[+] setproperty     :", ptr(addr));
@@ -473,7 +481,7 @@ Memory.scan(pep_base.base, pep_base.size, patterns.setproperty, {
     onComplete: function() { }
 });
 
-Memory.scan(pep_base.base, pep_base.size, patterns.getproperty, {
+Memory.scan(flash_lib.base, flash_lib.size, patterns.getproperty, {
     onMatch : function(addr, size) {
         if (!getproperty_f) {
             console.log("[+] getproperty     :", ptr(addr));
@@ -485,7 +493,7 @@ Memory.scan(pep_base.base, pep_base.size, patterns.getproperty, {
 });
 
 findPattern(patterns.darkbot, function(addr, size) {
-    addr -= 228;
+    addr -= 226;
     if (as3_ns)
         return;
     var main_address    = ptr(addr + 0x540).readPointer();

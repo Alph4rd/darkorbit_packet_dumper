@@ -15,7 +15,11 @@ output_json = False
 
 def find_flash_process():
     for proc in psutil.process_iter(["pid", "ppid", "cmdline"]):
-        if proc.info["cmdline"] and "--type=ppapi" in proc.info["cmdline"]:
+        try:
+            flash_lib = next(filter(lambda m: m.path.find("Flash.ocx") >= 0, proc.memory_maps()))
+        except:
+            flash_lib = None
+        if flash_lib != None or (proc.info["cmdline"] and "--type=ppapi" in proc.info["cmdline"]):
             return(proc.info["pid"])
     return None
 
