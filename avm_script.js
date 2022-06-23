@@ -1,5 +1,5 @@
-const packet_sender_id  = 27058;
-const packet_handler_id = 27065;
+const packet_sender_id  = 27117;
+const packet_handler_id = 27124;
 var patterns = { 
     darkbot : "ff ff 01 00 00 00 00 00 00 00 00 00 00 00 01 00 00 00 00 00 00 00 02 00 00 00 00 00 00 00 01 00 00 00 00 00 00 00 01 00 00 00 00 00 00 00 00 00 00 00 01 00 00 00 01 00 00 00 00 00 00 00 00 00 00 00 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 00 00 00 00 00 00 00"
 };
@@ -362,7 +362,7 @@ function getClassName(script_obj) {
 
 function packetToString(packet_obj) {
     if (stringify_f && my_json_object && separator_string)
-        return readAvmString(stringify_f(my_json_object, packet_obj.add(1), 0, 0, separator_string ));
+        return readAvmString(stringify_f(my_json_object, packet_obj.add(1), ptr(0), ptr(0), separator_string ));
 
     return null;
 }
@@ -452,7 +452,7 @@ Memory.scan(flash_lib.base, flash_lib.size, patterns.stringify, {
     onMatch : function(addr, size) {
         if (!stringify_f) {
             console.log("[+] Json stringify     :", ptr(addr));
-            stringify_f = new NativeFunction(ptr(addr), 'pointer', ['pointer', 'pointer', 'uint64', 'uint64', 'pointer']);
+            stringify_f = new NativeFunction(ptr(addr), 'pointer', ['pointer', 'pointer', 'pointer', 'pointer', 'pointer']);
         }
     },
     onError: function(reason){ },
