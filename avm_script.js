@@ -2,8 +2,7 @@ var patterns = {
     darkbot : "ff ff 01 00 00 00 00 00 00 00 00 00 00 00 01 00 00 00 00 00 00 00 02 00 00 00 00 00 00 00 01 00 00 00 00 00 00 00 01 00 00 00 00 00 00 00 00 00 00 00 01 00 00 00 01 00 00 00 00 00 00 00 00 00 00 00 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 00 00 00 00 00 00 00"
 };
 
-function findFlashLib()
-{
+function findFlashLib() {
     return Process.enumerateModules().find(el => {
         return el.name.indexOf("pepflash") >= 0 || el.name.indexOf("Flash.ocx") >= 0
     })
@@ -57,14 +56,15 @@ if (Process.platform == "windows") {
         patterns.setproperty        = "48 89 5c 24 08 48 89 6c 24 10 48 89 74 24 18 48 89 7c 24 20 41 56 48 83 ec 30 48 8b 5c 24 60 48 8b ea"
         patterns.getproperty        = "40 53 55 56 57 41 56 48 83 ec 30 48 8b 05 ?? ?? ?? ?? 48 33 c4 48 89 44 24 28 48 8b f2 49 8b f9"
         patterns.createstring       = "40 53 55 57 41 55 41 57 48 83 ec 60 48 8b 05 ?? ?? ?? ?? 48 33 c4 48 89 44 24 40"
-        //patterns.newarray           = "48 89 5c 24 08 57 48 83 ec 20 48 8b 41 18 8b da ba 09 00 00 00 49 8b f8 48 8b 48 08"
+        patterns.newarray           = "48 89 5c 24 08 57 48 83 ec 20 48 8b 41 18 8b da ba 09 00 00 00 49 8b f8 48 8b 48 08"
         offsets.ns_list = 0x180;
     } else {
-        patterns.stringify = "40 53 48 81 ec c0 00 00 00 48 8b 84 24 f0 00 00 00 48 8b da 48 8b 51 10 48 89 44 24 28"
-        patterns.verifyjit          = "48 89 5c 24 08 48 89 6c 24 10 48 89 74 24 18 57 48 81 ec 00 03 00 00 48 8d 41 30"
-        patterns.setproperty = "48 89 5c 24 08 48 89 6c 24 10 48 89 74 24 18 48 89 7c 24 20 41 56 48 83 ec 30 48 8b 5c 24 60 48 8b ea 49 8b f9 49 8b f0 4c 8b f1 48 8b 53 28"
-        patterns.getproperty = "48 89 5c 24 08 48 89 6c 24 10 56 57 41 56 48 83 ec 20 48 8b f2 4d 8b f1 49 8b 51 28 49 8b d8"
-        patterns.createstring = "40 53 55 57 41 55 41 56 48 83 ec 50 33 ed 45 8b f1 41 8b d8 48 8b fa 4c 8b e9 48 85 d2"
+        patterns.stringify      = "40 53 48 81 ec c0 00 00 00 48 8b 84 24 f0 00 00 00 48 8b da 48 8b 51 10 48 89 44 24 28"
+        patterns.verifyjit      = "48 89 5c 24 08 48 89 6c 24 10 48 89 74 24 18 57 48 81 ec 00 03 00 00 48 8d 41 30"
+        patterns.setproperty    = "48 89 5c 24 08 48 89 6c 24 10 48 89 74 24 18 48 89 7c 24 20 41 56 48 83 ec 30 48 8b 5c 24 60 48 8b ea 49 8b f9 49 8b f0 4c 8b f1 48 8b 53 28"
+        patterns.getproperty    = "48 89 5c 24 08 48 89 6c 24 10 56 57 41 56 48 83 ec 20 48 8b f2 4d 8b f1 49 8b 51 28 49 8b d8"
+        patterns.createstring   = "40 53 55 57 41 55 41 56 48 83 ec 50 33 ed 45 8b f1 41 8b d8 48 8b fa 4c 8b e9 48 85 d2"
+        patterns.newarray       = "48 89 5c 24 08 57 48 83 ec 20 48 8b 41 18 8b da ba 09 00 00 00"
     }
 
 
@@ -74,6 +74,7 @@ if (Process.platform == "windows") {
     patterns.setproperty        = "48 89 5c 24 e0 48 89 6c 24 e8 48 89 d3 4c 89 64 24 f0 4c 89 6c 24 f8 48 83 ec 38 49 89 f5 49 8b 70 28"
     patterns.getproperty        = "48 89 5c 24 d8 48 89 6c 24 e0 48 89 d3 4c 89 64 24 e8 4c 89 6c 24 f0 49 89 f4 4c 89 74 24 f8 48 83 ec 38 48 8b 71 28 48 89 fd 49 89 cd e8 3e 60 fd ff"
     patterns.createstring       = "41 57 41 56 41 55 49 89 fd 41 54 55 89 d5 53 48 89 f3 48 83 ec 68 48 85 f6"
+    patterns.newarray           = "48 89 5c 24 f0 48 89 6c 24 f8 48 83 ec 18 48 8b 47 18 48 89 d3 89 f5 be 09 00 00 00"
 
     offsets= {
         method_list : 0x180,
@@ -82,7 +83,7 @@ if (Process.platform == "windows") {
         mn_count : 0x98
     };
 } else {
-    console.log("[!] Os not supported");
+    console.log("[!] OS not supported");
 }
 
 
@@ -101,7 +102,7 @@ function getObjectTraits(object_ptr) {
     var pos_type   = traits.add(0xf5).readU8();
 
     if (pos_type != 0)
-        return;
+        return [ ];
 
     var tdata = new CoolPtr(traits_pos);
 
