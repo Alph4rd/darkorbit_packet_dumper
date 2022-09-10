@@ -302,20 +302,25 @@ function readAvmString(str_pointer, c=0) {
     return str_addr.readCString(size);
 }
 
-function getMethodName(method_info) {
-    var name_list = avm.constant_pool.add(0x190).readPointer();
-    var method_id = method_info.add(0x40).readU32();
-
-    var name_index = name_list.add(4 + method_id * 4).readInt();
-
+function getMethodName(method_info, with_class_name=false) {
+    var name_list   = avm.constant_pool.add(0x190).readPointer();
+    var method_id   = method_info.add(0x40).readU32();
+    var name_index  = name_list.add(4 + method_id * 4).readInt();
+    var declarer    = method_info.add(0x20).readPointer();
+    
     if (name_index < 0) {
         name_index = -name_index;
         var multiname = getMultiname(name_index);
         if (multiname != 0) {
-            //console.log(multiname.add(0x8).readPointer());
-            return readAvmString(multiname.readPointer());
-        }
+            var prefix = "";
 
+            // bit 0 in declarer is 'is_traits' flag
+            if(with_class_name && declarer.and(1) == 0 && declarer.compare(1) > 0)
+            {
+                prefix += readAvmString(declarer.and(~1).add(0x90).readPointer()) + "::";
+            }
+            return prefix + readAvmString(multiname.readPointer());
+        }
         return "";
     } else {
         // TODO: handle non negative names
@@ -325,6 +330,26 @@ function getMethodName(method_info) {
 
 function methodIsCompiled(method_info_ptr) {
     return ((method_info_ptr.add(0x60).readU32() >> 21) & 1) == 1;
+}
+
+function getStackTrace() {
+    let stack_entry = avm.core.add(0x58).readPointer();
+    let result = [];
+
+    while (!stack_entry.equals(0)) {
+        let method_env = stack_entry.add(0x8).readPointer();
+
+        if (method_env.and(0x1) == 0 && method_env.and(~2) != 0) {
+            method_env = method_env.and(~2);
+            let method_info = method_env.add(0x10).readPointer();
+            if (!method_info.equals(0)) {
+                result.push(method_info);
+            }
+        }
+        stack_entry = stack_entry.readPointer();
+    }
+
+    return result;
 }
 
 function getPacketIdFromObj(packet_obj) {
@@ -376,8 +401,15 @@ function onPacketRecv(args) {
     var packet_id = getPacketIdFromObj(packet_obj);
     var str_packet = packetToString(packet_obj);
 
-    if (packet_id && str_packet)
-        send({"type":0, "id":packet_id, "name":getClassName(packet_obj), "packet": JSON.parse(str_packet)});
+    if (packet_id && str_packet) {
+        send({
+            "type":0,
+            "id":packet_id,
+            "name":getClassName(packet_obj),
+            "packet": JSON.parse(str_packet),
+            "stacktrace": getStackTrace(true).map(minfo => getMethodName(minfo,true))
+        });
+    }
 };
 
 function onPacketSend(args) {
@@ -388,8 +420,15 @@ function onPacketSend(args) {
     var packet_id = getPacketIdFromObj(packet_obj);
     var str_packet = packetToString(packet_obj);
 
-    if (packet_id && str_packet)
-        send({"type":1, "id":packet_id, "name":getClassName(packet_obj), "packet": JSON.parse(str_packet)});
+    if (packet_id && str_packet) {
+        send({
+            "type":1,
+            "id":packet_id,
+            "name":getClassName(packet_obj),
+            "packet": JSON.parse(str_packet),
+            "stacktrace": getStackTrace(true).map(minfo => getMethodName(minfo,true))
+        });
+    }
 };
 
 function createAvmString(str) {
