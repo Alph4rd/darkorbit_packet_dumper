@@ -1,3 +1,4 @@
+
 var patterns = { 
     darkbot : "ff ff 01 00 00 00 00 00 00 00 00 00 00 00 01 00 00 00 00 00 00 00 02 00 00 00 00 00 00 00 01 00 00 00 00 00 00 00 01 00 00 00 00 00 00 00 00 00 00 00 01 00 00 00 01 00 00 00 00 00 00 00 00 00 00 00 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 00 00 00 00 00 00 00"
 };
@@ -333,6 +334,82 @@ function methodIsCompiled(method_info_ptr) {
     return ((method_info_ptr.add(0x60).readU32() >> 21) & 1) == 1;
 }
 
+function getClassName(script_obj) {
+    script_obj = removeKind(script_obj);
+    var vtable = script_obj.add(0x10).readPointer();
+    var traits = vtable.add(0x28).readPointer();
+    var name_str = traits.add(0x90).readPointer();
+    return readAvmString(name_str);
+}
+
+function createAvmString(str) {
+    var string_buf = Memory.allocUtf8String(str);
+    return createstring_f(avm.core, string_buf, -1, 0, 0, 0);
+}
+
+function createAvmArray(elements) {
+    var array_args = Memory.alloc(elements.length * 8);
+    for (var i = 0; i < elements.length; i++) {
+        array_args.add(i * 8).writePointer(jsValueToAtom());
+    }
+    return newarray_f(menv, elements.length, array_args);
+}
+
+function jsValueToAtom(value) {
+    if (typeof(value) == "number"){ 
+        return ptr(value << 3).or(6);
+    } else if (typeof(value) == "string") {
+        return createAvmString(value).or(2);
+    } else if (typeof(value) == "boolean") {
+        return ptr((+ value) << 3).or(5);
+    } else if (Array.isArray(value)) {
+        return createAvmArray(value);
+    }
+}
+
+function callObjectMethod(obj_ptr, index, args) {
+    var env = obj_ptr.add(0x10).readPointer().add(0x78 + index * 8).readPointer();
+    var method_ptr = new NativeFunction(env.add(0x8).readPointer(), 'int64', ['pointer', 'pointer', 'pointer']);
+
+    const args_buf = Memory.alloc((args.length + 1) * 8);
+    args_buf.writePointer(obj_ptr);
+    for (var i = 0; i < args.length; i++) {
+        args_buf.add((i+1)*8).writePointer(args[i]);
+    }
+
+    return method_ptr(env, args.length, args_buf);
+}
+
+function getObjectMethods(object) {
+    var result = [];
+    var ev_vtable = object.add(0x10).readPointer();
+    for(var i = 0x78; i < getObjectSize(ev_vtable); i+= 8) {
+        var env = ev_vtable.add(i).readPointer();
+        result.push(env);
+    }
+    return result;
+}
+
+function findClassClosure(pred) {
+    var finddef_table = avm.abc_env.add(0x28).readPointer(); 
+    var capacity = finddef_table.add(0x8).readU32();
+    var data = ArrayBuffer.wrap(finddef_table.add(0x10), capacity * 8);
+    var ptrs = new BigUint64Array(data);
+
+    for (var i = 0; i < capacity; i++) {
+        if (ptrs[i]) {
+            var entry = ptr(Number(ptrs[i]));
+            var closure = entry.add(0x20).readPointer();
+            if (closure.compare(0x200000001) == 1 && closure.and(7).equals(0)) {
+                if (pred(closure)) {
+                    return closure;
+                }
+            }
+        }
+    }
+    return null;
+}
+
 function getStackTrace() {
     let stack_entry = avm.core.add(0x58).readPointer();
     let result = [];
@@ -374,14 +451,6 @@ function getPacketIdFromObj(packet_obj) {
     }
 
     return null;
-}
-
-function getClassName(script_obj) {
-    script_obj = removeKind(script_obj);
-    var vtable = script_obj.add(0x10).readPointer();
-    var traits = vtable.add(0x28).readPointer();
-    var name_str = traits.add(0x90).readPointer();
-    return readAvmString(name_str);
 }
 
 function packetToString(packet_obj) {
@@ -432,22 +501,8 @@ function onPacketSend(args) {
     }
 };
 
-function createAvmString(str) {
-    var string_buf = Memory.allocUtf8String(str);
-    return createstring_f(avm.core, string_buf, -1, 0, 0, 0);
-}
 
-function jsValueToAtom(value) {
-    if (typeof(value) == "number"){ 
-        return ptr(value << 3).or(6);
-    } else if (typeof(value) == "string") {
-        return createAvmString(value).or(2);
-    } else if (typeof(value) == "boolean") {
-        return ptr((+ value) << 3).or(5);
-    }
-}
 
-// TODO: support onLeave
 function hookLater(method_ptr, callback) {
     hook_queue.push({method:method_ptr, handler:callback});
 }
