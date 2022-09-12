@@ -156,13 +156,11 @@ function getObjectTraits(object_ptr) {
             case TRAIT_Method:
             case TRAIT_Getter:
             case TRAIT_Setter:
-            {
                 var disp_id         = tdata.ReadU32();
                 // is an index that points into the method array of the abcFile e
                 var method_index    = tdata.ReadU32(); 
                 traits.push({name : name, kind : kind, method : method_index});
                 break;
-            }
             default:
         }
 
@@ -319,8 +317,7 @@ function getMethodName(method_info, with_class_name=false) {
             var prefix = "";
 
             // bit 0 in declarer is 'is_traits' flag
-            if(with_class_name && declarer.and(1) == 0 && declarer.compare(1) > 0)
-            {
+            if(with_class_name && declarer.and(1) == 0 && declarer.compare(1) > 0) {
                 prefix += readAvmString(declarer.and(~1).add(0x90).readPointer()) + "::";
             }
             return prefix + readAvmString(multiname.readPointer());
@@ -330,6 +327,27 @@ function getMethodName(method_info, with_class_name=false) {
         // TODO: handle non negative names
     }
     return "";
+}
+
+function getMethodParams(method_info) {
+	var abc_info_ptr = method_info.add(0x38).readPointer();
+
+	if (abc_info_ptr.equals(0))
+		return [];
+
+    var tdata = new CoolPtr(abc_info_ptr);
+
+	var param_count = tdata.ReadU32();
+	/*var ret_type = */ tdata.ReadU32();
+
+	var params = [];
+
+	for (var i = 0; i < param_count; i++) {
+		var type = tdata.ReadU32();
+		params.push(getMultiname(type));
+	}
+
+	return params;
 }
 
 function methodIsCompiled(method_info_ptr) {
@@ -602,12 +620,40 @@ findPattern(patterns.darkbot, function(addr, size) {
     avm.constant_pool   = avm.abc_env.add(0x8).readPointer();
 
     var method_list      = avm.constant_pool.add(offsets.method_list).readPointer();
+    var method_count     = avm.constant_pool.add(offsets.method_list + 8).readPointer();
     var ns_list          = avm.core.add(offsets.ns_list).readPointer();
     var ns_count         = avm.core.add(0x80).readPointer();
 
-    // ids are not reliable, might change after an update
-    packet_handler = method_list.add(0x10 + packet_handler_id * 8).readPointer();
-    packet_sender  = method_list.add(0x10 + packet_sender_id  * 8).readPointer();
+	var methods_addr = Array.from(new BigUint64Array(method_list.add(0x10).readByteArray(method_count * 8)));
+	const methods = methods_addr.map(addr => ptr(addr.toString()));
+
+	packet_handler = methods.find(method_info => {
+		var full_name = getMethodName(method_info, true);
+		return full_name.endsWith("::execute") && full_name.indexOf("$::") >= 0;
+	});
+
+	packet_sender = methods.find(method_info => {
+		if (getMethodName(method_info) == "sendMessage") {
+			var params = getMethodParams(method_info);
+			// There are two matches for this, but one calls the other so it's probably fine
+			return params.length == 1 && params[0] && readAvmString(params[0].readPointer()) == "IModule";
+		}
+	});
+
+    // Hook methods, or wait for them to be jit compiled before hooking
+    if (!methodIsCompiled(packet_handler)) {
+        console.log("[+] Packet receiver is not compiled, waiting for it");
+        hookLater(packet_handler, onPacketRecv);
+    } else {
+        Interceptor.attach(packet_handler.add(0x8).readPointer(), { onEnter: onPacketRecv });
+    }
+
+    if (!methodIsCompiled(packet_sender)) {
+        console.log("[+] Packet sender is not compiled, waiting for it");
+        hookLater(packet_sender, onPacketSend);
+    } else {
+        Interceptor.attach(packet_sender.add(0x8).readPointer(), { onEnter: onPacketSend });
+    }
 
     // Iterate namespaces
     for (var i = 0, c = 0; i < 0x40000 && c < ns_count; i++) {
@@ -647,19 +693,4 @@ findPattern(patterns.darkbot, function(addr, size) {
     console.log("[+] Packet handler     :", packet_handler.add(0x8));
     console.log("[+] Packet sender      :", packet_sender.add(0x8));
 
-
-    // Hook methods, or wait for them to be jit compiled before hooking
-    if (!methodIsCompiled(packet_handler)) {
-        console.log("[+] Packet receiver is not compiled, waiting for it");
-        hookLater(packet_handler, onPacketRecv);
-    } else {
-        Interceptor.attach(packet_handler.add(0x8).readPointer(), { onEnter: onPacketRecv });
-    }
-
-    if (!methodIsCompiled(packet_sender)) {
-        console.log("[+] Packet sender is not compiled, waiting for it");
-        hookLater(packet_sender, onPacketSend);
-    } else {
-        Interceptor.attach(packet_sender.add(0x8).readPointer(), { onEnter: onPacketSend });
-    }
 });
