@@ -1,3 +1,5 @@
+const packet_handler_id = 27160;
+const packet_sender_id = 27153;
 
 var patterns = { 
     darkbot : "ff ff 01 00 00 00 00 00 00 00 00 00 00 00 01 00 00 00 00 00 00 00 02 00 00 00 00 00 00 00 01 00 00 00 00 00 00 00 01 00 00 00 00 00 00 00 00 00 00 00 01 00 00 00 01 00 00 00 00 00 00 00 00 00 00 00 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 00 00 00 00 00 00 00"
@@ -595,7 +597,6 @@ findPattern(patterns.darkbot, function(addr, size) {
     avm.toplevel        = vtable.add(0x8).readPointer();
     var vtable_init     = vtable.add(0x10).readPointer();
     var vtable_scope    = vtable_init.add(0x18).readPointer();
-
     avm.abc_env         = vtable_scope.add(0x10).readPointer();
     avm.core            = traits.add(0x8).readPointer();
     avm.constant_pool   = avm.abc_env.add(0x8).readPointer();
@@ -604,19 +605,9 @@ findPattern(patterns.darkbot, function(addr, size) {
     var ns_list          = avm.core.add(offsets.ns_list).readPointer();
     var ns_count         = avm.core.add(0x80).readPointer();
 
-    var conn_manager    = main_address.add(0x230).readPointer();
-
-    var conn = conn_manager.add(0xd8).readPointer();
-
-    packet_sender = getObjectMethods(conn)[13].add(0x10).readPointer();
-    var packet_handler_class = findClassClosure(closure => {
-        var methods = getObjectMethods(closure);
-        if (methods.length == 8 && !methods[7].equals(0) && getMethodName(methods[7].add(0x10).readPointer()) == "execute")
-        {
-            packet_handler = methods[7].add(0x10).readPointer();
-        }
-    });
-
+    // ids are not reliable, might change after an update
+    packet_handler = method_list.add(0x10 + packet_handler_id * 8).readPointer();
+    packet_sender  = method_list.add(0x10 + packet_sender_id  * 8).readPointer();
 
     // Iterate namespaces
     for (var i = 0, c = 0; i < 0x40000 && c < ns_count; i++) {
