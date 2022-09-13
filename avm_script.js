@@ -1,6 +1,3 @@
-const packet_handler_id = 27160;
-const packet_sender_id = 27153;
-
 var patterns = { 
     darkbot : "ff ff 01 00 00 00 00 00 00 00 00 00 00 00 01 00 00 00 00 00 00 00 02 00 00 00 00 00 00 00 01 00 00 00 00 00 00 00 01 00 00 00 00 00 00 00 00 00 00 00 01 00 00 00 01 00 00 00 00 00 00 00 00 00 00 00 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 00 00 00 00 00 00 00"
 };
@@ -50,6 +47,7 @@ if (Process.platform == "windows") {
     offsets = {
         method_list : 0x148,
         ns_list : 0x188,
+        method_names : 0x158,
         mn_list : 0xc8,
         mn_count : 0x80
     }
@@ -82,6 +80,7 @@ if (Process.platform == "windows") {
     offsets= {
         method_list : 0x180,
         ns_list : 0x190,
+        method_names : 0x190,
         mn_list : 0xe8,
         mn_count : 0x98
     };
@@ -305,7 +304,7 @@ function readAvmString(str_pointer, c=0) {
 }
 
 function getMethodName(method_info, with_class_name=false) {
-    var name_list   = avm.constant_pool.add(0x190).readPointer();
+    var name_list   = avm.constant_pool.add(offsets.method_names).readPointer();
     var method_id   = method_info.add(0x40).readU32();
     var name_index  = name_list.add(4 + method_id * 4).readInt();
     var declarer    = method_info.add(0x20).readPointer();
@@ -476,7 +475,6 @@ function getPacketIdFromObj(packet_obj) {
 function packetToString(packet_obj) {
     if (stringify_f && my_json_object && separator_string)
         return readAvmString(stringify_f(my_json_object, packet_obj.add(1), ptr(0), ptr(0), separator_string ));
-
     return null;
 }
 
@@ -620,7 +618,7 @@ findPattern(patterns.darkbot, function(addr, size) {
     avm.constant_pool   = avm.abc_env.add(0x8).readPointer();
 
     var method_list      = avm.constant_pool.add(offsets.method_list).readPointer();
-    var method_count     = avm.constant_pool.add(offsets.method_list + 8).readPointer();
+    var method_count     = avm.constant_pool.add(offsets.method_list + 8).readU32();
     var ns_list          = avm.core.add(offsets.ns_list).readPointer();
     var ns_count         = avm.core.add(0x80).readPointer();
 
