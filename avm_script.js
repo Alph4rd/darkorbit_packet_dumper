@@ -11,10 +11,7 @@ function findFlashLib() {
 var flash_lib = findFlashLib();
 
 // Objects for json stringfy
-var as3_ns = null;
-var separator_string = null;
-var my_json_object = null;
-var fake_vtable = null;
+var json_object = null;
 
 // String* stringifySpecializedToString(Atom value, ArrayObject* propertyWhitelist, FunctionObject* replacerFunction, String* gap);
 var stringify_f     = null;
@@ -25,7 +22,7 @@ var setproperty_f   = null;
 // Atom Toplevel::getproperty(Atom obj, const Multiname* multiname, VTable* vtable)
 var getproperty_f   = null;
 
-// 
+// Stringp String::createUTF8(AvmCore* core, const utf8_t* buffer, int32_t len, Width desiredWidth, bool staticBuf, bool strict)
 var createstring_f = null;
 
 var packet_handler = null;
@@ -473,8 +470,9 @@ function getPacketIdFromObj(packet_obj) {
 }
 
 function packetToString(packet_obj) {
-    if (stringify_f && my_json_object && separator_string)
-        return readAvmString(stringify_f(my_json_object, packet_obj.add(1), ptr(0), ptr(0), separator_string ));
+	var separator = createAvmString("");
+    if (stringify_f && json_object) 
+        return readAvmString(stringify_f(json_object, packet_obj.add(1), ptr(0), ptr(0),  separator));
     return null;
 }
 
@@ -604,9 +602,10 @@ Memory.scan(flash_lib.base, flash_lib.size, patterns.getproperty, {
 });
 
 findPattern(patterns.darkbot, function(addr, size) {
+	if (avm.toplevel != null) { return; }
+
     addr -= 226;
-    if (as3_ns)
-        return;
+
     var main_address    = ptr(addr + 0x540).readPointer();
     var vtable          = main_address.add(0x10).readPointer();
     var traits          = vtable.add(0x28).readPointer();
@@ -653,37 +652,11 @@ findPattern(patterns.darkbot, function(addr, size) {
         Interceptor.attach(packet_sender.add(0x8).readPointer(), { onEnter: onPacketSend });
     }
 
-    // Iterate namespaces
-    for (var i = 0, c = 0; i < 0x40000 && c < ns_count; i++) {
-        var namespace = ns_list.add(i * 8).readPointer();
-        if (namespace == 0)
-            continue;
+	json_object = findClassClosure(function(closure) {
+		return !closure.add(0x30).readPointer().equals(0) && getClassName(closure) == "JSON$";
+	});
 
-        try { var namespace_str = namespace.add(0x18).readPointer(); }
-        catch { break; }
-
-        var s = readAvmString(namespace_str, 0);
-
-        // Find as3 namespace
-        if (s && s == "http://adobe.com/AS3/2006/builtin" && !as3_ns) {
-            as3_ns = namespace;
-            // Remove AtomKind bits
-            var namespace_str = removeKind(namespace.add(0x18).readPointer());
-            separator_string = Memory.dup(namespace_str, 0x28);
-            separator_string.add(0x20).writeU64(0x0);
-
-            my_json_object = Memory.alloc(0x38);
-            my_json_object.add(0x30).writePointer(as3_ns);
-
-            fake_vtable = Memory.alloc(0x38);
-            fake_vtable.add(8).writePointer(avm.toplevel);
-            my_json_object.add(0x10).writePointer(fake_vtable);
-            console.log("[+] Fake json object   :", my_json_object);
-            break;
-        }
-        c++;
-    }
-
+	console.log("[+] Json object   :", json_object);
     console.log("[+] Main address       :", main_address);
     console.log("[+] ConstPool address  :", avm.constant_pool);
     console.log("[+] AvmCore address    :", avm.core);
