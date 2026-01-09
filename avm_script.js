@@ -246,16 +246,13 @@ class CoolPtr {
 }
 
 function findPattern(pattern, match_handler) {
-    var ranges = Process.enumerateRangesSync({protection: 'r--', coalesce: true});
-    var stop = false;
-
-    for (var range of ranges) {
+    Process.enumerateRanges('r--').forEach(function(range) {
         Memory.scan(range.base, range.size, pattern, {
             onMatch: match_handler,
             onError: function(reason){ },
             onComplete: function() { }
         });
-    }
+    });
 }
 
 function getMultiname(index) {
@@ -602,7 +599,7 @@ Memory.scan(flash_lib.base, flash_lib.size, patterns.getproperty, {
 });
 
 findPattern(patterns.darkbot, function(addr, size) {
-	if (avm.toplevel != null) { return; }
+    if (avm.toplevel != null) { return; }
 
     addr -= 226;
 
@@ -621,21 +618,21 @@ findPattern(patterns.darkbot, function(addr, size) {
     var ns_list          = avm.core.add(offsets.ns_list).readPointer();
     var ns_count         = avm.core.add(0x80).readPointer();
 
-	var methods_addr = Array.from(new BigUint64Array(method_list.add(0x10).readByteArray(method_count * 8)));
-	const methods = methods_addr.map(addr => ptr(addr.toString()));
+    var methods_addr = Array.from(new BigUint64Array(method_list.add(0x10).readByteArray(method_count * 8)));
+    const methods = methods_addr.map(addr => ptr(addr.toString()));
 
-	packet_handler = methods.find(method_info => {
-		var full_name = getMethodName(method_info, true);
-		return full_name.endsWith("::execute") && full_name.indexOf("$::") >= 0;
-	});
+    packet_handler = methods.find(method_info => {
+        var full_name = getMethodName(method_info, true);
+        return full_name.endsWith("::execute") && full_name.indexOf("$::") >= 0;
+    });
 
-	packet_sender = methods.find(method_info => {
-		if (getMethodName(method_info) == "sendMessage") {
-			var params = getMethodParams(method_info);
-			// There are two matches for this, but one calls the other so it's probably fine
-			return params.length == 1 && params[0] && readAvmString(params[0].readPointer()) == "IModule";
-		}
-	});
+    packet_sender = methods.find(method_info => {
+        if (getMethodName(method_info) == "sendMessage") {
+            var params = getMethodParams(method_info);
+            // There are two matches for this, but one calls the other so it's probably fine
+            return params.length == 1 && params[0] && readAvmString(params[0].readPointer()) == "IModule";
+        }
+    });
 
     // Hook methods, or wait for them to be jit compiled before hooking
     if (!methodIsCompiled(packet_handler)) {
@@ -652,16 +649,15 @@ findPattern(patterns.darkbot, function(addr, size) {
         Interceptor.attach(packet_sender.add(0x8).readPointer(), { onEnter: onPacketSend });
     }
 
-	json_object = findClassClosure(function(closure) {
-		return !closure.add(0x30).readPointer().equals(0) && getClassName(closure) == "JSON$";
-	});
+    json_object = findClassClosure(function(closure) {
+        return !closure.add(0x30).readPointer().equals(0) && getClassName(closure) == "JSON$";
+    });
 
-	console.log("[+] Json object   :", json_object);
+    console.log("[+] Json object   :", json_object);
     console.log("[+] Main address       :", main_address);
     console.log("[+] ConstPool address  :", avm.constant_pool);
     console.log("[+] AvmCore address    :", avm.core);
     console.log("[+] Namespace list     :", ns_list);
     console.log("[+] Packet handler     :", packet_handler.add(0x8));
     console.log("[+] Packet sender      :", packet_sender.add(0x8));
-
 });
